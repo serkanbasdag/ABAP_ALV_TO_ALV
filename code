@@ -1,0 +1,298 @@
+REPORT zsb_alv_trans.
+
+TABLES: zsb_t_ds, zsb_t_ds_01.
+
+DATA: g_cont_t1        TYPE scrfname VALUE 'CONT1',
+      g_grid_t1        TYPE REF TO cl_gui_alv_grid,
+      g_custom_cont_t1 TYPE REF TO cl_gui_custom_container,
+      gs_layout_t1     TYPE lvc_s_layo,
+      gt_fcat_t1       TYPE lvc_t_fcat,
+      gs_fcat_t1       LIKE LINE OF gt_fcat_t1.
+
+gs_layout_t1-zebra = 'X'.
+
+DATA: g_cont_t2        TYPE scrfname VALUE 'CONT2',
+      g_grid_t2        TYPE REF TO cl_gui_alv_grid,
+      g_custom_cont_t2 TYPE REF TO cl_gui_custom_container,
+      gs_layout_t2     TYPE lvc_s_layo,
+      gt_fcat_t2       TYPE lvc_t_fcat,
+      gs_fcat_t2       LIKE LINE OF gt_fcat_t2.
+
+gs_layout_t2-zebra = 'X'.
+
+data: t11 TYPE TABLE OF zsb_t_ds,
+      t22 TYPE TABLE OF zsb_t_ds_01,
+      s11 like zsb_t_ds,
+      s22 like zsb_t_ds_01.
+
+gs_layout_t1-sel_mode = 'A'.
+gs_layout_t2-sel_mode = 'A'.
+
+PERFORM get_data.
+
+CALL SCREEN 100.
+
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_0100  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE status_0100 OUTPUT.
+  SET PF-STATUS 'BUTTONS'.
+  SET TITLEBAR 'TITLE' WITH sy-datum sy-uzeit.
+
+  PERFORM get_fcat.
+  PERFORM get_cont.
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_0100  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_0100 INPUT.
+
+  CASE sy-ucomm.
+    WHEN 'BACK' OR 'EXIT' OR 'CANCEL'.
+      LEAVE TO SCREEN 0.
+    WHEN 'SAG'.
+      PERFORM sag.
+    WHEN 'SOL'.
+      PERFORM sol.
+    WHEN 'SIL1'.
+      PERFORM sil1.
+    WHEN 'SIL2'.
+      PERFORM sil2.
+  ENDCASE.
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Form  GET_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_data .
+  SELECT * INTO CORRESPONDING FIELDS OF TABLE t11
+    FROM zsb_t_ds.
+
+  SELECT * INTO CORRESPONDING FIELDS OF TABLE t22
+    FROM zsb_t_ds_01.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  GET_CONT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_cont .
+
+  IF g_custom_cont_t1 IS INITIAL.
+    CREATE OBJECT g_custom_cont_t1
+      EXPORTING
+        container_name = g_cont_t1.
+    CREATE OBJECT g_grid_t1
+      EXPORTING
+        i_parent = g_custom_cont_t1.
+
+    CALL METHOD g_grid_t1->set_table_for_first_display
+      EXPORTING
+        is_layout       = gs_layout_t1
+      CHANGING
+           it_outtab       = t11[]
+        it_fieldcatalog = gt_fcat_t1.
+
+  ELSE.
+    g_grid_t1->check_changed_data( ).
+    g_grid_t1->refresh_table_display( ).
+  ENDIF.
+
+  """"""""""""""""""""""""""""""""""""""""""""""""""
+
+  IF g_custom_cont_t2 IS INITIAL.
+    CREATE OBJECT g_custom_cont_t2
+      EXPORTING
+        container_name = g_cont_t2.
+    CREATE OBJECT g_grid_t2
+      EXPORTING
+        i_parent = g_custom_cont_t2.
+
+    CALL METHOD g_grid_t2->set_table_for_first_display
+      EXPORTING
+        is_layout       = gs_layout_t2
+      CHANGING
+         it_outtab       = t22[]
+        it_fieldcatalog = gt_fcat_t2.
+
+  ELSE.
+    g_grid_t2->check_changed_data( ).
+    g_grid_t2->refresh_table_display( ).
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  GET_FCAT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_fcat .
+
+  CALL FUNCTION 'LVC_FIELDCATALOG_MERGE'
+     EXPORTING
+       i_buffer_active        = 'X'
+*       i_internal_tabname     = 'T11'
+      i_structure_name       = 'ZSB_T_DS'
+       i_bypassing_buffer     = 'X'
+     CHANGING
+       ct_fieldcat            = gt_fcat_t1.
+
+  CALL FUNCTION 'LVC_FIELDCATALOG_MERGE'
+     EXPORTING
+       i_buffer_active        = 'X'
+      i_structure_name       = 'ZSB_T_DS_01'
+       i_bypassing_buffer     = 'X'
+     CHANGING
+       ct_fieldcat            = gt_fcat_t2.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SAG
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sag .
+
+* LVC FIELDCAT kullanıyorsan satır bilgisi alabilmek için bunu kullan.
+  DATA: lt_index_rows	TYPE lvc_t_row,
+        ls_index_rows LIKE LINE OF lt_index_rows,
+      lt_row_no	TYPE lvc_t_roid.
+
+  CALL METHOD g_grid_t1->get_selected_rows
+    IMPORTING
+      et_index_rows = lt_index_rows
+      et_row_no     = lt_row_no.
+
+sort lt_index_rows DESCENDING.
+LOOP AT lt_index_rows into ls_index_rows.
+  CLEAR: s11, s22.
+READ TABLE t11 into s11 index  ls_index_rows-index.
+
+    s22-tckno     = s11-tckno.
+    s22-ad            = s11-ad.
+    s22-soyad         = s11-soyad.
+    s22-dogum_yeri    = s11-dogum_yeri.
+    s22-dogum_tarihi  = s11-dogum_tarihi.
+    s22-cinsiyet      = s11-cinsiyet.
+    s22-yabanci_dil   = s11-yabanci_dil .
+    s22-egitim_durumu = s11-egitim_durumu.
+
+    APPEND s22 to t22.
+DELETE t11 INDEX ls_index_rows-index.
+DElETE zsb_t_ds FROM s11.
+  modify zsb_t_ds_01 FROM s11.
+
+ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SOL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sol .
+DATA: lt_index_rows	TYPE lvc_t_row,
+        ls_index_rows LIKE LINE OF lt_index_rows,
+      lt_row_no	TYPE lvc_t_roid.
+
+  CALL METHOD g_grid_t2->get_selected_rows
+    IMPORTING
+      et_index_rows = lt_index_rows
+      et_row_no     = lt_row_no.
+
+sort lt_index_rows DESCENDING.
+LOOP AT lt_index_rows into ls_index_rows.
+  CLEAR: s11, s22.
+READ TABLE t22 into s22 index  ls_index_rows-index.
+
+    s11-tckno         = s22-tckno.
+    s11-ad            = s22-ad.
+    s11-soyad         = s22-soyad.
+    s11-dogum_yeri    = s22-dogum_yeri.
+    s11-dogum_tarihi  = s22-dogum_tarihi.
+    s11-cinsiyet      = s22-cinsiyet.
+    s11-yabanci_dil   = s22-yabanci_dil .
+    s11-egitim_durumu = s22-egitim_durumu.
+
+    APPEND s11 to t11.
+DELETE t22 INDEX ls_index_rows-index.
+DElETE zsb_t_ds_01 FROM s22.
+  modify zsb_t_ds FROM s11.
+
+ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SIL1
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sil1 .
+  DATA: lt_index_rows	TYPE lvc_t_row,
+        ls_index_rows LIKE LINE OF lt_index_rows,
+      lt_row_no	TYPE lvc_t_roid.
+
+  CALL METHOD g_grid_t1->get_selected_rows
+    IMPORTING
+      et_index_rows = lt_index_rows
+      et_row_no     = lt_row_no.
+
+LOOP AT lt_index_rows into ls_index_rows.
+
+READ TABLE t11 into s11 index  ls_index_rows-index.
+
+DELETE t11 INDEX ls_index_rows-index.
+DElETE zsb_t_ds FROM s11.
+
+  ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SIL2
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sil2 .
+  DATA: lt_index_rows	TYPE lvc_t_row,
+        ls_index_rows LIKE LINE OF lt_index_rows,
+      lt_row_no	TYPE lvc_t_roid.
+
+  CALL METHOD g_grid_t2->get_selected_rows
+    IMPORTING
+      et_index_rows = lt_index_rows
+      et_row_no     = lt_row_no.
+
+LOOP AT lt_index_rows into ls_index_rows.
+
+READ TABLE t22 into s22 index  ls_index_rows-index.
+
+DELETE t22 INDEX ls_index_rows-index.
+DElETE zsb_t_ds_01 FROM s22.
+
+  ENDLOOP.
+ENDFORM.
